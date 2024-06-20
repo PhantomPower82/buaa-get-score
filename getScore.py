@@ -50,7 +50,7 @@ def get_score(year: str, semester: str):
     dic: dict[str, dict] = json.loads(response.text)
     res = []
     for i in dic["d"].values():
-        if i["xf"] is not None:
+        if i["kccj"] != "-":
             res.append(
                 {"km": i["kcmc"], "cj": i["kccj"], "xf": i["xf"], "lx": i["kclx"]}
             )
@@ -58,7 +58,7 @@ def get_score(year: str, semester: str):
 
 
 class TableWindow(QMainWindow):
-    def __init__(self, data):
+    def __init__(self, data: list[dict]) -> None:
         super().__init__()
 
         self.setWindowTitle("成绩查询")
@@ -89,7 +89,7 @@ class TableWindow(QMainWindow):
 
         self.setCentralWidget(centralWidget)
 
-    def setupTable(self, data):
+    def setupTable(self, data: list[dict]) -> None:
         self.table.setRowCount(len(data))
         self.table.setColumnCount(4)
         self.table.setHorizontalHeaderLabels(["课程", "成绩", "学分", "课程类型"])
@@ -100,7 +100,7 @@ class TableWindow(QMainWindow):
             self.table.setItem(row, 3, QTableWidgetItem(i["lx"]))
 
 
-def show_table(data):
+def show_table(data: list[dict]) -> None:
     app = QApplication(sys.argv)
     app.setStyle("Breeze")
     window = TableWindow(data)
