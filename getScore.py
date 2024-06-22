@@ -21,7 +21,7 @@ semester: str = "1"     # "1" | "2" | "3" 对应秋、春、夏
 cookie: str = ""        # 访问 https://app.buaa.edu.cn/buaascore/wap/default/index，控制台中查询 Cookie
 
 
-def get_score(year: str, semester: str):
+def get_score(year: str, semester: str) -> list[dict]:
     response = requests.post(
         "https://app.buaa.edu.cn/buaascore/wap/default/index",
         headers={
@@ -50,7 +50,7 @@ def get_score(year: str, semester: str):
     dic: dict[str, dict] = json.loads(response.text)
     res = []
     for i in dic["d"].values():
-        if i["kccj"] != "-":
+        if i["kccj"] != "":
             res.append(
                 {"km": i["kcmc"], "cj": i["kccj"], "xf": i["xf"], "lx": i["kclx"]}
             )
