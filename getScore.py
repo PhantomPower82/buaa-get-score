@@ -3,6 +3,7 @@ import random
 import requests
 import sys
 import time
+from pydantic import BaseModel, Field, ValidationError
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QAbstractScrollArea,
@@ -15,13 +16,37 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-
-year: str = "2023-2024"
-semester: str = "1"     # "1" | "2" | "3" 对应秋、春、夏
-cookie: str = ""        # 访问 https://app.buaa.edu.cn/buaascore/wap/default/index，控制台中查询 Cookie
+import yaml
 
 
-def get_score(year: str, semester: str) -> list[dict]:
+class IntervalConfig(BaseModel):
+    min: float = Field(..., description="最小冷却时间（秒）")
+    max: float = Field(..., description="最大冷却时间（秒）")
+
+
+class Config(BaseModel):
+    year: str = Field(..., description="学年")
+    semester: str = Field(..., description="学期")
+    cookie: str = Field(
+        ...,
+        description="登录后的 Cookie：访问 https://app.buaa.edu.cn/buaascore/wap/default/index 后 F12 查看 Network 中的 Cookie",
+    )
+    interval: IntervalConfig = Field(
+        IntervalConfig(min=60, max=360),
+        description="冷却时间配置",
+    )
+
+
+def load_config_from_dict(d: dict) -> Config:  # type: ignore
+    try:
+        return Config(**d)  # type: ignore
+    except ValidationError as e:
+        print("❌ 配置加载失败，详细信息如下：")
+        print(e)
+        exit(1)
+
+
+def get_score(year: str, semester: str) -> list[tuple[str, str, str, str]]:
     response = requests.post(
         "https://app.buaa.edu.cn/buaascore/wap/default/index",
         headers={
@@ -31,7 +56,7 @@ def get_score(year: str, semester: str) -> list[dict]:
             "Connection": "keep-alive",
             "Content-Length": "19",
             "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-            "Cookie": cookie,
+            "Cookie": config.cookie,
             "Host": "app.buaa.edu.cn",
             "Origin": "https://app.buaa.edu.cn",
             "Referer": "https://app.buaa.edu.cn/buaascore/wap/default/index",
@@ -47,18 +72,16 @@ def get_score(year: str, semester: str) -> list[dict]:
         data={"year": year, "xq": semester},
     )
     print("请求时间：", time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()))
-    dic: dict[str, dict] = json.loads(response.text)
-    res = []
+    dic: dict[str, dict[str, dict[str, str]]] = json.loads(response.text)
+    res: list[tuple[str, str, str, str]] = []
     for i in dic["d"].values():
         if i["kccj"] != "":
-            res.append(
-                {"km": i["kcmc"], "cj": i["kccj"], "xf": i["xf"], "lx": i["kclx"]}
-            )
+            res.append((i["kcmc"], i["kccj"], i["xf"], i["kclx"]))
     return res
 
 
 class TableWindow(QMainWindow):
-    def __init__(self, data: list[dict]) -> None:
+    def __init__(self, data: list[tuple[str, str, str, str]]) -> None:
         super().__init__()
 
         self.setWindowTitle("成绩查询")
@@ -67,10 +90,10 @@ class TableWindow(QMainWindow):
         self.table = QTableWidget()
         self.setupTable(data)
         header = self.table.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        if header:
+            header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+            for i in range(1, 4):
+                header.setSectionResizeMode(i, QHeaderView.ResizeMode.ResizeToContents)
         self.table.setSizeAdjustPolicy(
             QAbstractScrollArea.SizeAdjustPolicy.AdjustToContents
         )
@@ -89,18 +112,16 @@ class TableWindow(QMainWindow):
 
         self.setCentralWidget(centralWidget)
 
-    def setupTable(self, data: list[dict]) -> None:
+    def setupTable(self, data: list[tuple[str, str, str, str]]) -> None:
         self.table.setRowCount(len(data))
         self.table.setColumnCount(4)
-        self.table.setHorizontalHeaderLabels(["课程", "成绩", "学分", "课程类型"])
-        for row, i in enumerate(data):
-            self.table.setItem(row, 0, QTableWidgetItem(i["km"]))
-            self.table.setItem(row, 1, QTableWidgetItem(i["cj"]))
-            self.table.setItem(row, 2, QTableWidgetItem(i["xf"]))
-            self.table.setItem(row, 3, QTableWidgetItem(i["lx"]))
+        self.table.setHorizontalHeaderLabels(["课程", "成绩", "学分", "课程类型"])  # type: ignore
+        for i, row in enumerate(data):
+            for j, value in enumerate(row):
+                self.table.setItem(i, j, QTableWidgetItem(value))
 
 
-def show_table(data: list[dict]) -> None:
+def show_table(data: list[tuple[str, str, str, str]]) -> None:
     app = QApplication(sys.argv)
     app.setStyle("Breeze")
     window = TableWindow(data)
@@ -108,17 +129,21 @@ def show_table(data: list[dict]) -> None:
     app.exec()
 
 
+with open("config.yaml") as f:
+    raw_cfg = yaml.safe_load(f)
+config = load_config_from_dict(raw_cfg)
 pre = 0
 while True:
     try:
-        raw = get_score(year, semester)
+        raw = get_score(config.year, config.semester)
         print("已出科目数：", len(raw))
         if pre < len(raw):
             show_table(raw)
         pre = len(raw)
-    except:
-        print("网络错误")
-        pre = 0
-    interval = 60 + random.random() * 300
+    except requests.exceptions.RequestException as e:
+        print("网络错误：", e)
+    interval = config.interval.min + random.random() * (
+        config.interval.max - config.interval.min
+    )
     print(f"冷却时间：{interval} s")
     time.sleep(interval)
