@@ -4,12 +4,12 @@ BUAA 自动查分
 
 # Usage
 
-更改 `config.yaml` 中的配置，运行 `getScore.py` 即可。
+运行 `pip install -r requirements.txt`，更改 `config.yaml` 中的配置，运行 `getScore.py` 即可。
 
 ```yaml
 year: "2024-2025" # 学年
 semester: "2"     # 学期，"1" | "2" | "3" 对应秋、春、夏
-cookie: ""        # 访问 https://app.buaa.edu.cn/buaascore/wap/default/index，控制台中查询 Cookie
+cookie: ""        # 打开控制台，访问 https://app.buaa.edu.cn/buaascore/wap/default/index，在返回的前端页面（网络请求名为 index）中查询 Cookie，格式类似 eai-sess=xxx; xxbh21.8=xxx; UUkey=xxx
 interval:
   min: 60         # 最小冷却时间（秒）
   max: 300        # 最大冷却时间（秒）
