@@ -129,7 +129,7 @@ def show_table(data: list[tuple[str, str, str, str]]) -> None:
     app.exec()
 
 
-with open("config.yaml") as f:
+with open("config.yaml", encoding="utf-8") as f:
     raw_cfg = yaml.safe_load(f)
 config = load_config_from_dict(raw_cfg)
 pre = 0

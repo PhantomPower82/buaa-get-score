@@ -1,2 +1,4 @@
+pydantic
 pyyaml
 PyQt6
+requests
